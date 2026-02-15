@@ -1,84 +1,76 @@
+// final_project/client/general.js
+const axios = require("axios");
 
-const express = require('express');
-const public = express.Router();
+// In the lab, server runs on localhost:5000
+const BASE_URL = process.env.BOOKS_API_BASE_URL || "http://localhost:5000";
 
-let db = require('./booksdb.js').books;
+function normalizeError(err) {
+  const status = err?.response?.status ?? 500;
+  const data = err?.response?.data ?? null;
+  const message = data?.message || err?.message || "Request failed";
 
-let isValid = require('./auth_users.js').isValid;
-let users = require('./auth_users.js').users;
-
-
-
-// db connection not provided in the course
-
-
-
-function search(col, it, res) {
-    if (col === '/') return res.status(200).json({ books: db });
-    else if (col === 'review' && db.hasOwnProperty(it))
-        return res.status(200).json(db[it].reviews);
-    else {
-        let result = {};
-        if (col === 'isbn') Object.keys(db)
-            .filter(id => String(id).indexOf(it) > -1)
-            .forEach(id => result[id] = db[id])
-            ;
-        else {
-            for (const id in db) {
-                if (Object.hasOwnProperty.call(db, id)) {
-                    if (String(db[id][col]).indexOf(it) > -1) {
-                        result[id] = db[id]
-                    }
-                }
-            }
-        }
-        if (Object.keys(result).length)
-            return res.status(200).json(result);
-        else return res.status(404).json({ message: 'Not Found' })
-    }
+  return { ok: false, status, error: message, data };
 }
 
+/**
+ * Retrieve all books
+ * GET /
+ */
+async function getAllBooks() {
+  try {
+    const res = await axios.get(`${BASE_URL}/`);
+    return { ok: true, status: res.status, data: res.data };
+  } catch (err) {
+    return normalizeError(err);
+  }
+}
 
+/**
+ * Retrieve books by ISBN
+ * GET /isbn/:isbn
+ */
+async function getBooksByISBN(isbn) {
+  try {
+    const res = await axios.get(`${BASE_URL}/isbn/${encodeURIComponent(isbn)}`);
+    return { ok: true, status: res.status, data: res.data };
+  } catch (err) {
+    return normalizeError(err);
+  }
+}
 
-public.get('/', function(req, res) {
-    return search('/', null, res)
-});
-
-public.get('/isbn/:isbn', function(req, res) {
-    return search('isbn', req.params['isbn'], res)
-});
-
-public.get('/author/:author', function(req, res) {
-    return search('author', req.params['author'], res)
-});
-
-public.get('/title/:title', function(req, res) {
-    return search('title', req.params['title'], res)
-});
-
-public.get('/review/:isbn', function(req, res) {
-    return search('review', req.params['isbn'], res)
-});
-
-
-
-public.post('/register', (req, res) => {
-    const db = isValid(req.body.username);
-    let note = 'is not valid (2 to 8 characters, lowercase or numbers)'
-      , code = 401
-      ;
-    if (db === 0) note = 'is unavailable';
-    else if (db === 1) {
-        code = 200;
-        users.push({
-            username: req.body.username,
-            password: req.body.password
-        });
-        note = 'successfully registered, you can login'
+/**
+ * Retrieve books by author
+ * GET /author/:author
+ * Must handle "not found" with 404 properly
+ */
+async function getBooksByAuthor(author) {
+  try {
+    const res = await axios.get(`${BASE_URL}/author/${encodeURIComponent(author)}`);
+    return { ok: true, status: res.status, data: res.data };
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      return { ok: false, status: 404, error: "Author not found", data: err.response.data };
     }
-    return res.status(code).json({ message: `${req.body.username} ${note}` })
-});
+    return normalizeError(err);
+  }
+}
 
+/**
+ * Retrieve books by title
+ * GET /title/:title
+ */
+async function getBooksByTitle(title) {
+  try {
+    const res = await axios.get(`${BASE_URL}/title/${encodeURIComponent(title)}`);
+    return { ok: true, status: res.status, data: res.data };
+  } catch (err) {
+    return normalizeError(err);
+  }
+}
 
-
-module.exports.general = public;
+module.exports = {
+  getAllBooks,
+  getBooksByISBN,
+  getBooksByAuthor,
+  getBooksByTitle,
+};
