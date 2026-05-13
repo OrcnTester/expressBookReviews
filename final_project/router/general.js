@@ -1,84 +1,130 @@
+const express = require("express");
+const axios = require("axios");
 
-const express = require('express');
-const public = express.Router();
+let books = require("./booksdb.js");
+let isValid = require("./auth_users.js").isValid;
+let users = require("./auth_users.js").users;
 
-let db = require('./booksdb.js').books;
+const public_users = express.Router();
+const BASE_URL = "http://localhost:5000";
 
-let isValid = require('./auth_users.js').isValid;
-let users = require('./auth_users.js').users;
+public_users.post("/register", (req, res) => {
+    const { username, password } = req.body;
 
+    if (!username || !password) {
+        return res.status(400).json({ message: "Username and password are required" });
+    }
 
+    if (isValid(username)) {
+        return res.status(409).json({ message: "User already exists" });
+    }
 
-// db connection not provided in the course
+    users.push({ username, password });
 
+    return res.status(201).json({
+        message: "User successfully registered. Now you can login"
+    });
+});
 
+// Get the book list available in the shop
+public_users.get("/", async function (req, res) {
+    try {
+        return res.status(200).json(books);
+    } catch (error) {
+        return res.status(500).json({ message: "Error retrieving books" });
+    }
+});
 
-function search(col, it, res) {
-    if (col === '/') return res.status(200).json({ books: db });
-    else if (col === 'review' && db.hasOwnProperty(it))
-        return res.status(200).json(db[it].reviews);
-    else {
-        let result = {};
-        if (col === 'isbn') Object.keys(db)
-            .filter(id => String(id).indexOf(it) > -1)
-            .forEach(id => result[id] = db[id])
-            ;
-        else {
-            for (const id in db) {
-                if (Object.hasOwnProperty.call(db, id)) {
-                    if (String(db[id][col]).indexOf(it) > -1) {
-                        result[id] = db[id]
-                    }
-                }
-            }
-        }
-        if (Object.keys(result).length)
-            return res.status(200).json(result);
-        else return res.status(404).json({ message: 'Not Found' })
+// Get book details based on ISBN
+public_users.get("/isbn/:isbn", function (req, res) {
+    const isbn = req.params.isbn;
+    const book = books[isbn];
+
+    if (!book) {
+        return res.status(404).json({ message: "Book not found" });
+    }
+
+    return res.status(200).json(book);
+});
+
+// Get book details based on author
+public_users.get("/author/:author", function (req, res) {
+    const author = decodeURIComponent(req.params.author).toLowerCase();
+
+    const result = Object.fromEntries(
+        Object.entries(books).filter(([isbn, book]) =>
+            book.author.toLowerCase().includes(author)
+        )
+    );
+
+    if (Object.keys(result).length === 0) {
+        return res.status(404).json({ message: "No books found for this author" });
+    }
+
+    return res.status(200).json(result);
+});
+
+// Get all books based on title
+public_users.get("/title/:title", function (req, res) {
+    const title = decodeURIComponent(req.params.title).toLowerCase();
+
+    const result = Object.fromEntries(
+        Object.entries(books).filter(([isbn, book]) =>
+            book.title.toLowerCase().includes(title)
+        )
+    );
+
+    if (Object.keys(result).length === 0) {
+        return res.status(404).json({ message: "No books found for this title" });
+    }
+
+    return res.status(200).json(result);
+});
+
+// Get book review
+public_users.get("/review/:isbn", function (req, res) {
+    const isbn = req.params.isbn;
+
+    if (!books[isbn]) {
+        return res.status(404).json({ message: "Book not found" });
+    }
+
+    return res.status(200).json(books[isbn].reviews);
+});
+
+// Axios / Promise examples for assignment requirement
+function getAllBooksUsingAxios() {
+    return axios.get(`${BASE_URL}/`)
+        .then(response => response.data)
+        .catch(error => ({ error: error.message }));
+}
+
+function getBookByISBNUsingAxios(isbn) {
+    return axios.get(`${BASE_URL}/isbn/${isbn}`)
+        .then(response => response.data)
+        .catch(error => ({ error: error.message }));
+}
+
+async function getBooksByAuthorUsingAxios(author) {
+    try {
+        const response = await axios.get(`${BASE_URL}/author/${encodeURIComponent(author)}`);
+        return response.data;
+    } catch (error) {
+        return { error: error.message };
     }
 }
 
-
-
-public.get('/', function(req, res) {
-    return search('/', null, res)
-});
-
-public.get('/isbn/:isbn', function(req, res) {
-    return search('isbn', req.params['isbn'], res)
-});
-
-public.get('/author/:author', function(req, res) {
-    return search('author', req.params['author'], res)
-});
-
-public.get('/title/:title', function(req, res) {
-    return search('title', req.params['title'], res)
-});
-
-public.get('/review/:isbn', function(req, res) {
-    return search('review', req.params['isbn'], res)
-});
-
-
-
-public.post('/register', (req, res) => {
-    const db = isValid(req.body.username);
-    let note = 'is not valid (2 to 8 characters, lowercase or numbers)'
-      , code = 401
-      ;
-    if (db === 0) note = 'is unavailable';
-    else if (db === 1) {
-        code = 200;
-        users.push({
-            username: req.body.username,
-            password: req.body.password
-        });
-        note = 'successfully registered, you can login'
+async function getBooksByTitleUsingAxios(title) {
+    try {
+        const response = await axios.get(`${BASE_URL}/title/${encodeURIComponent(title)}`);
+        return response.data;
+    } catch (error) {
+        return { error: error.message };
     }
-    return res.status(code).json({ message: `${req.body.username} ${note}` })
-});
+}
 
-
-
-module.exports.general = public;
+module.exports.general = public_users;
+module.exports.getAllBooksUsingAxios = getAllBooksUsingAxios;
+module.exports.getBookByISBNUsingAxios = getBookByISBNUsingAxios;
+module.exports.getBooksByAuthorUsingAxios = getBooksByAuthorUsingAxios;
+module.exports.getBooksByTitleUsingAxios = getBooksByTitleUsingAxios;
