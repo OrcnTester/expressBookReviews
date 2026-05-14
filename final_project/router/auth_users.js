@@ -39,8 +39,7 @@ regd_users.post("/login", (req, res) => {
     };
 
     return res.status(200).json({
-        message: "User successfully logged in",
-        token: accessToken
+        message: "Login successful!"
     });
 });
 
@@ -59,9 +58,9 @@ regd_users.put("/auth/review/:isbn", (req, res) => {
     }
 
     books[isbn].reviews[username] = review;
-
+    
     return res.status(200).json({
-        message: "Review successfully posted",
+        message: "Review added/updated successfully",
         reviews: books[isbn].reviews
     });
 });
